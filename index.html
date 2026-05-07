@@ -1,4 +1,7 @@
-<!DOCTYPE html>
+<select id="${idPfx}-ecsel" style="width:100%;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;font-size:11px;font-family:var(--mono);background:var(--surface2);outline:none;color:var(--text)" onchange="onECSelect(this)">
+          <option value="">── 選擇規格 ──</option>
+          ${tbl.map((r,i)=>`<option value="${i}" data-kgm="${r.kgm}" data-label="${r.label}">${r.label}　${r.kgm}kg/m</option>`).join('')}
+        </select><!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
@@ -428,9 +431,9 @@ function buildInputCell(item,rowIdx){
     return `<div>
       <span class="ct-badge" style="background:#e8f4e8;color:#1a6b2a">查表</span>
       <div style="margin-top:4px;display:flex;flex-direction:column;gap:4px">
-        <select id="${idPfx}-tsel" style="width:100%;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;font-size:11px;font-family:var(--mono);background:var(--surface2);outline:none;color:var(--text)" onchange="onChannelSelect('${idPfx}',${JSON.stringify(tbl).replace(/'/g,'&#39;')})">
+        <select id="${idPfx}-tsel" style="width:100%;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;font-size:11px;font-family:var(--mono);background:var(--surface2);outline:none;color:var(--text)" onchange="onChannelSelect(this)">
           <option value="">── 選擇規格 ──</option>
-          ${opts}
+          ${tbl.map((r,i)=>`<option value="${i}" data-kgm="${r.kgm}" data-label="${r.label}" data-t1="${r.t1}" data-t2="${r.t2}">${r.label}　t1=${r.t1}/t2=${r.t2}　${r.kgm}kg/m</option>`).join('')}
         </select>
         <div id="${idPfx}-kgm-info" style="font-size:10px;color:var(--text3);min-height:14px"></div>
         <div style="display:flex;align-items:center;gap:4px">
@@ -495,7 +498,7 @@ function buildInputCell(item,rowIdx){
     return `<div>
       <span class="ct-badge" style="background:#e8f4e8;color:#1a6b2a">查表</span>
       <div style="margin-top:4px;display:flex;flex-direction:column;gap:4px">
-        <select id="${idPfx}-esel" style="width:100%;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;font-size:11px;font-family:var(--mono);background:var(--surface2);outline:none;color:var(--text)" onchange="onECSelect('${idPfx}',${JSON.stringify(tbl).replace(/'/g,'&#39;').replace(/\//g,'\\/')})">
+        <select id="${idPfx}-esel" style="width:100%;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;font-size:11px;font-family:var(--mono);background:var(--surface2);outline:none;color:var(--text)" onchange="onECSelect(this)">
           <option value="">── 選擇規格 ──</option>
           ${opts}
         </select>
@@ -554,16 +557,14 @@ function renderRows(filter){
         <div class="t-spec">${item.p||'—'}</div>
       </td>
       <td class="t-unit">${item.t==='box_table'?'$/m':item.u}</td>
-      <td>
-        ${item.t==='box_table'
-          ? `<input class="price-in" type="number" placeholder="選規格後自動填入" min="0" step="0.01"
-              data-name="${ne}" data-spec="${pe}" data-unit="${item.u}" data-type="${item.t}"
-              style="width:82px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-family:var(--mono);font-size:11px;color:var(--text3);background:var(--surface2);text-align:right;outline:none">`
-          : `<input class="price-in" type="number" value="${item.v}" min="0" step="0.01"
-              data-name="${ne}" data-spec="${pe}" data-unit="${item.u}" data-type="${item.t||'qty'}">`
-        }
-        ${item.d ? `<div style="font-size:9px;color:var(--text3);margin-top:1px;font-family:var(--mono)">${item.d}</div>` : ''}
-      </td>
+      <td>${item.t==='box_table'
+        ? `<input class="price-in" type="number" placeholder="選規格後自動填入" min="0" step="0.01"
+            data-name="${ne}" data-spec="${pe}" data-unit="${item.u}" data-type="${item.t}"
+            style="width:82px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-family:var(--mono);font-size:11px;color:var(--text3);background:var(--surface2);text-align:right;outline:none">`
+        : `<input class="price-in" type="number" value="${item.v}" min="0" step="0.01"
+            data-name="${ne}" data-spec="${pe}" data-unit="${item.u}" data-type="${item.t||'qty'}">
+          ${item.d ? `<div style="font-size:9px;color:var(--text3);margin-top:1px;font-family:var(--mono)">${item.d}</div>` : ''}`
+      }</td>
       <td>${inputCell}</td>
       <td class="subtotal" id="r${i}-sub">—</td>
       <td><button class="add-btn" id="r${i}-addbtn" onclick="addRow(${i})">加入</button></td>
@@ -587,27 +588,26 @@ function renderRows(filter){
 function fmtMoney(n){return '$'+Math.round(n).toLocaleString('zh-TW');}
 
 // ── channel_table: select from table ─────────────────────────────
-function onChannelSelect(pfx, tbl) {
-  const sel = document.getElementById(pfx+'-tsel');
-  const idx = parseInt(sel.value);
-  if (isNaN(idx)) { document.getElementById(pfx+'-kgm-info').textContent=''; return; }
-  const spec = tbl[idx];
-  document.getElementById(pfx+'-kgm-info').textContent =
-    `H${spec.H}×B${spec.B}mm  腹厚t1=${spec.t1}  翼厚t2=${spec.t2}  → ${spec.kgm} kg/m`;
-  calcChannelTable(pfx, null);
+function onChannelSelect(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  const kgm = parseFloat(opt.dataset.kgm) || 0;
+  const label = opt.dataset.label || '';
+  const pfx = sel.id.replace('-tsel','');
+  const infoEl = document.getElementById(pfx+'-kgm-info');
+  if(infoEl) infoEl.textContent = kgm ? label+'　→　'+kgm+' kg/m　× $32/kg' : '';
+  calcChannelTable(pfx);
 }
-function calcChannelTable(pfx, priceOverride) {
+function calcChannelTable(pfx) {
   const sel = document.getElementById(pfx+'-tsel');
-  const idx = parseInt(sel.value);
-  const len = parseFloat(document.getElementById(pfx+'-clen').value) || 0;
-  const subEl = document.getElementById(pfx+'-sub');
-  if (isNaN(idx) || !len) { if(subEl) subEl.textContent='—'; return; }
+  const opt = sel ? sel.options[sel.selectedIndex] : null;
+  const kgm = opt ? parseFloat(opt.dataset.kgm)||0 : 0;
+  const lenMm = parseFloat((document.getElementById(pfx+'-clen')||{}).value)||0;
+  const total = kgm * (lenMm/1000) * 32;
   const row = sel.closest('tr');
-  const price = priceOverride || parseFloat(row.querySelector('.price-in').value) || 32;
-  const spec = (row.__channelTbl||[])[idx] || null;
-  if (!spec) return;
-  const kg = spec.kgm * (len / 1000);
-  if(subEl) subEl.textContent = fmtMoney(kg * price);
+  const sub = row.querySelector('.subtotal');
+  if(sub) sub.textContent = total>0 ? '$'+total.toFixed(0) : '—';
+  const pin = row.querySelector('.price-in');
+  if(pin && kgm) pin.value = (kgm*32).toFixed(1);
 }
 
 // ── channel_custom: fill from preset ──────────────────────────────
@@ -650,24 +650,12 @@ function onBoxSelect(sel) {
   const opt = sel.options[sel.selectedIndex];
   const ppm = parseFloat(opt.dataset.ppm) || 0;
   const bar = parseFloat(opt.dataset.bar) || 0;
-  const row = sel.closest('tr');
-  // update price-in
-  const pin = row.querySelector('.price-in');
-  if(pin){
-    if(ppm){
-      pin.value = ppm;
-      pin.style.color = 'var(--accent)';
-      pin.style.background = 'var(--accent-bg)';
-    } else {
-      pin.value = '';
-      pin.style.color = '';
-    }
-  }
-  // update ref hint
   const pfx = sel.id.replace('-bsel','');
   const refEl = document.getElementById(pfx+'-bref');
-  if(refEl) refEl.textContent = ppm ? `$${ppm}/m　(整支 $${bar}/6m)` : '';
-  // recalc
+  if(refEl) refEl.textContent = ppm ? '$'+ppm+'/m　(整支 $'+bar+'/6m)' : '';
+  const row = sel.closest('tr');
+  const pin = row.querySelector('.price-in');
+  if(pin){ pin.value = ppm||''; pin.style.color = ppm?'var(--accent)':''; }
   calcBoxTable(pfx);
 }
 function calcBoxTable(pfx) {
@@ -682,14 +670,14 @@ function calcBoxTable(pfx) {
   const total=ppm*(len/1000);
   if(subEl)subEl.textContent=fmtMoney(total);
 }
-function onECSelect(pfx, tbl) {
-  const sel=document.getElementById(pfx+'-esel');
-  const idx=parseInt(sel.value);
-  if(isNaN(idx)){document.getElementById(pfx+'-ekgm').textContent='';return;}
-  const spec=tbl[idx];
-  document.getElementById(pfx+'-ekgm').textContent=
-    `H${spec.H}×B${spec.B}×C${spec.C}×t${spec.t}mm → ${spec.kgm} kg/m`;
-  calcECTable(pfx,null);
+function onECSelect(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  const kgm = parseFloat(opt.dataset.kgm) || 0;
+  const label = opt.dataset.label || '';
+  const pfx = sel.id.replace('-ecsel','');
+  const infoEl = document.getElementById(pfx+'-ec-info');
+  if(infoEl) infoEl.textContent = kgm ? label+'　→　'+kgm.toFixed(3)+' kg/m　× $32/kg' : '';
+  calcEcTable(pfx);
 }
 function calcECTable(pfx, priceOverride) {
   const sel=document.getElementById(pfx+'-esel');
@@ -1008,10 +996,14 @@ async function connectSheets(silent=false){
     const json=await res.json();
     const rows=(json.values||[]).slice(1);
     const newDB=rows.filter(r=>r[0]&&r[2]).map(r=>({
-      c:r[0]||'',s:r[1]||'',n:r[2]||'',p:r[3]||'',u:r[4]||'',v:parseFloat(r[5])||0,t:'qty'
+      c:r[0]||'',s:r[1]||'',n:r[2]||'',p:r[3]||'',u:r[4]||'',v:parseFloat(r[5])||0,
+      d:r[6]||'',t:'qty'
     }));
     if(!newDB.length)throw new Error('工作表無資料');
-    DB=newDB;
+    // 保留特殊計算項目（channel_table / ec_table / box_table）來自 RAW
+    const specialTypes = new Set(['channel_table','ec_table','box_table']);
+    const specials = RAW.filter(it=>specialTypes.has(it.t));
+    DB = [...specials, ...newDB];
     try{localStorage.setItem(SK_SH,JSON.stringify({id,key}))}catch(e){}
     badge.textContent=`🟢 Google Sheets · ${newDB.length}筆`;
     badge.style.color='#4caf50';
