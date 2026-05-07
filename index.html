@@ -5,6 +5,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>材料成本計算器</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -31,6 +32,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13
 .logo-sub{font-size:10px;color:#888}
 .db-badge{font-size:10px;padding:2px 8px;border-radius:10px;background:#2a2a28;color:#aaa;border:1px solid #3a3a38;font-family:var(--mono);margin-left:12px}
 .topbar-right{display:flex;align-items:center;gap:8px}
+.edit-btn{padding:6px 14px;border-radius:6px;border:1px solid var(--border2);
+  background:var(--surface);color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--sans)}
+.edit-btn:hover{background:var(--surface2);color:var(--text)}
 .sheets-btn{font-size:11px;padding:4px 12px;border-radius:6px;border:1px solid #3a3a38;background:transparent;color:#aaa;cursor:pointer;font-family:var(--sans);transition:all .15s}
 .sheets-btn:hover{border-color:#888;color:#eee}
 /* sidebar */
@@ -193,6 +197,8 @@ tbody td{padding:5px 10px;vertical-align:middle}
     <span class="db-badge" id="db-badge">內建資料庫 · 3427筆</span>
   </div>
   <div class="topbar-right">
+    <button id="oauth-btn" onclick="oauthSignIn()" style="padding:6px 14px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);font-size:12px;cursor:pointer;font-family:var(--sans)">🔑 登入 Google</button>
+    <button class="edit-btn" onclick="openEditor()">✏️ 編輯資料庫</button>
     <button class="sheets-btn" onclick="openModal()">🔗 連接 Google Sheets</button>
   </div>
 </header>
@@ -1021,6 +1027,326 @@ document.addEventListener('click',e=>{
     document.querySelectorAll('.calc-popup.open').forEach(p=>p.classList.remove('open'));
   }
 });
+
+
+// ═══════════ Google OAuth2 ═══════════
+const CLIENT_ID = '1036371909661-0v2jbum9ulp0lm4ab0grm10n5tka9vug.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+let oauthToken = null;
+let tokenClient = null;
+
+function initOAuth(){
+  if(!window.google) return;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: (resp) => {
+      if(resp.error) { alert('登入失敗：'+resp.error); return; }
+      oauthToken = resp.access_token;
+      document.getElementById('oauth-btn').textContent = '✅ 已登入';
+      document.getElementById('oauth-btn').style.color = 'var(--green)';
+      document.getElementById('oauth-btn').style.borderColor = 'var(--green)';
+    }
+  });
+}
+
+function oauthSignIn(){
+  if(!tokenClient){ initOAuth(); }
+  if(!tokenClient){ alert('Google 登入元件尚未載入，請稍後再試'); return; }
+  if(oauthToken){
+    // 已登入，點擊可登出
+    oauthToken = null;
+    document.getElementById('oauth-btn').textContent = '🔑 登入 Google';
+    document.getElementById('oauth-btn').style.color = 'var(--text2)';
+    document.getElementById('oauth-btn').style.borderColor = 'var(--border2)';
+    return;
+  }
+  tokenClient.requestAccessToken();
+}
+
+window.addEventListener('load', ()=>{
+  setTimeout(initOAuth, 1000);
+});
+// ═════════════════════════════════════
+
+// ═══════════ 資料庫編輯器 ═══════════
+let edData = [];      // 目前顯示的（已過濾）索引
+let edDirty = false;  // 是否有未儲存變更
+
+function openEditor(){
+  // 填入分類選單
+  const catSel = document.getElementById('ed-cat');
+  const cats = [...new Set(DB.filter(i=>!['channel_table','ec_table','box_table'].includes(i.t)).map(i=>i.c))].sort();
+  catSel.innerHTML = '<option value="">全部分類</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  document.getElementById('ed-search').value = '';
+  edFilter();
+  document.getElementById('editor-modal').style.display = 'flex';
+}
+
+function closeEditor(){
+  if(edDirty && !confirm('有未儲存的變更，確定要關閉嗎？')) return;
+  document.getElementById('editor-modal').style.display = 'none';
+  edDirty = false;
+}
+
+function edFilter(){
+  const q = document.getElementById('ed-search').value.trim().toLowerCase();
+  const cat = document.getElementById('ed-cat').value;
+  const skip = new Set(['channel_table','ec_table','box_table']);
+  edData = DB.map((it,i)=>({it,i})).filter(({it})=>{
+    if(skip.has(it.t)) return false;
+    if(cat && it.c !== cat) return false;
+    if(q && !`${it.n} ${it.p}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  edRender();
+  document.getElementById('ed-count').textContent = `顯示 ${edData.length} 筆`;
+}
+
+function edRender(){
+  const tbody = document.getElementById('ed-tbody');
+  tbody.innerHTML = edData.map(({it,i})=>`
+    <tr data-idx="${i}" style="border-bottom:1px solid var(--border)">
+      <td style="padding:4px 8px;text-align:center">
+        <input type="checkbox" class="ed-chk" data-idx="${i}" onchange="edChkChange()">
+      </td>
+      <td style="padding:4px 8px">
+        <input value="${esc(it.c)}" onchange="edChange(${i},'c',this.value)"
+          style="width:100%;padding:3px 5px;border:1px solid transparent;border-radius:4px;font-size:11px;background:transparent;font-family:var(--sans)"
+          onfocus="this.style.borderColor='var(--accent)';this.style.background='#fff'"
+          onblur="this.style.borderColor='transparent';this.style.background='transparent'">
+      </td>
+      <td style="padding:4px 8px">
+        <input value="${esc(it.s)}" onchange="edChange(${i},'s',this.value)"
+          style="width:100%;padding:3px 5px;border:1px solid transparent;border-radius:4px;font-size:11px;background:transparent;font-family:var(--sans)"
+          onfocus="this.style.borderColor='var(--accent)';this.style.background='#fff'"
+          onblur="this.style.borderColor='transparent';this.style.background='transparent'">
+      </td>
+      <td style="padding:4px 8px">
+        <input value="${esc(it.n)}" onchange="edChange(${i},'n',this.value)"
+          style="width:100%;padding:3px 5px;border:1px solid transparent;border-radius:4px;font-size:11px;font-weight:600;background:transparent;font-family:var(--sans)"
+          onfocus="this.style.borderColor='var(--accent)';this.style.background='#fff'"
+          onblur="this.style.borderColor='transparent';this.style.background='transparent'">
+      </td>
+      <td style="padding:4px 8px">
+        <input value="${esc(it.p)}" onchange="edChange(${i},'p',this.value)"
+          style="width:100%;padding:3px 5px;border:1px solid transparent;border-radius:4px;font-size:11px;color:var(--text2);background:transparent;font-family:var(--mono)"
+          onfocus="this.style.borderColor='var(--accent)';this.style.background='#fff'"
+          onblur="this.style.borderColor='transparent';this.style.background='transparent'">
+      </td>
+      <td style="padding:4px 8px">
+        <input value="${esc(it.u)}" onchange="edChange(${i},'u',this.value)"
+          style="width:100%;padding:3px 5px;border:1px solid transparent;border-radius:4px;font-size:11px;background:transparent;font-family:var(--mono)"
+          onfocus="this.style.borderColor='var(--accent)';this.style.background='#fff'"
+          onblur="this.style.borderColor='transparent';this.style.background='transparent'">
+      </td>
+      <td style="padding:4px 8px;text-align:right">
+        <input type="number" value="${it.v}" onchange="edChange(${i},'v',parseFloat(this.value)||0)"
+          style="width:100%;padding:3px 5px;border:1px solid transparent;border-radius:4px;font-size:11px;font-weight:700;color:var(--accent);text-align:right;background:transparent;font-family:var(--mono)"
+          onfocus="this.style.borderColor='var(--accent)';this.style.background='#fff'"
+          onblur="this.style.borderColor='transparent';this.style.background='transparent'">
+      </td>
+      <td style="padding:4px 8px;text-align:center">
+        <button onclick="edDelete(${i})" title="刪除"
+          style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px 6px;border-radius:4px"
+          onmouseover="this.style.color='#c00';this.style.background='#fee'"
+          onmouseout="this.style.color='var(--text3)';this.style.background='none'">✕</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function edChange(idx, field, val){
+  DB[idx][field] = val;
+  edDirty = true;
+}
+
+function edDelete(idx){
+  if(!confirm(`確定刪除「${DB[idx].n} ${DB[idx].p}」？`)) return;
+  DB.splice(idx, 1);
+  edDirty = true;
+  edFilter();
+}
+
+function edAddRow(){
+  const cat = document.getElementById('ed-cat').value || '黑鐵';
+  DB.push({c:cat, s:'', n:'新品項', p:'', u:'支', v:0, t:'qty'});
+  edDirty = true;
+  document.getElementById('ed-search').value = '';
+  document.getElementById('ed-cat').value = cat;
+  edFilter();
+  // 捲到最後一筆
+  const tbody = document.getElementById('ed-tbody');
+  setTimeout(()=>{ tbody.lastElementChild && tbody.lastElementChild.scrollIntoView({behavior:'smooth'}); }, 100);
+}
+
+async function edSaveSheets(){
+  if(!oauthToken){
+    alert('請先點右上角「🔑 登入 Google」完成授權，才能儲存到 Sheets。');
+    return;
+  }
+  const savedSH = (() => { try{ return JSON.parse(localStorage.getItem('sh_conn')||'{}'); }catch(e){return{};} })();
+  const id = savedSH.id || document.getElementById('m-id').value;
+  if(!id){ alert('請先連接 Google Sheets'); return; }
+
+  const btn = document.getElementById('ed-save-btn');
+  btn.textContent = '儲存中…'; btn.disabled = true;
+
+  const skip = new Set(['channel_table','ec_table','box_table']);
+  const rows = DB.filter(it=>!skip.has(it.t)).map(it=>[it.c,it.s,it.n,it.p,it.u,it.v,it.d||'']);
+  rows.unshift(['分類','子分類','品名','規格','單位','單價','備註']);
+
+  try{
+    // 清除舊資料
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/%E6%9D%90%E6%96%99%E5%96%AE%E5%83%B9%E5%BA%AB:clear`,
+      {method:'POST', headers:{'Authorization':'Bearer '+oauthToken,'Content-Type':'application/json'}, body:'{}'});
+    // 寫入新資料
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/%E6%9D%90%E6%96%99%E5%96%AE%E5%83%B9%E5%BA%AB?valueInputOption=RAW`,
+      {method:'PUT', headers:{'Authorization':'Bearer '+oauthToken,'Content-Type':'application/json'},
+       body: JSON.stringify({range:'材料單價庫', majorDimension:'ROWS', values:rows})});
+    if(!res.ok){ const e=await res.json(); throw new Error(e.error?.message||'寫入失敗'); }
+    edDirty = false;
+    btn.textContent = '✓ 已儲存！';
+    btn.style.background = 'var(--green)';
+    setTimeout(()=>{ btn.textContent='💾 儲存到 Sheets'; btn.style.background='var(--accent)'; btn.disabled=false; }, 2500);
+    const badge = document.getElementById('db-badge');
+    if(badge) badge.textContent = '🟢 Google Sheets · '+DB.filter(i=>!skip.has(i.t)).length+'筆';
+  } catch(err){
+    alert('儲存失敗：'+err.message);
+    btn.textContent = '💾 儲存到 Sheets'; btn.disabled = false;
+  }
+}
+
+// ── 批次移動 ──────────────────────────────────────────────────
+let edSelected = new Set();
+
+function edChkChange(){
+  edSelected = new Set(
+    [...document.querySelectorAll('.ed-chk:checked')].map(c=>parseInt(c.dataset.idx))
+  );
+  edUpdateBatchBar();
+}
+
+function edToggleAll(checked){
+  document.querySelectorAll('.ed-chk').forEach(c=>{ c.checked=checked; });
+  edChkChange();
+}
+
+function edClearSel(){
+  document.querySelectorAll('.ed-chk').forEach(c=>{ c.checked=false; });
+  const allChk = document.getElementById('ed-chk-all');
+  if(allChk) allChk.checked = false;
+  edSelected.clear();
+  edUpdateBatchBar();
+}
+
+function edUpdateBatchBar(){
+  const bar = document.getElementById('ed-batch-bar');
+  const countEl = document.getElementById('ed-batch-count');
+  if(edSelected.size > 0){
+    bar.style.display = 'flex';
+    countEl.textContent = `已選 ${edSelected.size} 筆`;
+    // 填入分類選單
+    const catSel = document.getElementById('ed-batch-cat');
+    const cats = [...new Set(DB.filter(i=>!['channel_table','ec_table','box_table'].includes(i.t)).map(i=>i.c))].sort();
+    catSel.innerHTML = '<option value="">選分類…</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function edBatchFillSub(){
+  const cat = document.getElementById('ed-batch-cat').value;
+  const subSel = document.getElementById('ed-batch-sub');
+  if(!cat){ subSel.innerHTML = '<option value="">選子分類…</option>'; return; }
+  const subs = [...new Set(DB.filter(i=>i.c===cat && !['channel_table','ec_table','box_table'].includes(i.t)).map(i=>i.s))].sort();
+  subSel.innerHTML = '<option value="">選子分類…</option>' + subs.map(s=>`<option value="${s}">${s}</option>`).join('');
+}
+
+function edBatchMove(){
+  const cat = document.getElementById('ed-batch-cat').value;
+  const sub = document.getElementById('ed-batch-sub').value;
+  if(!cat){ alert('請選擇目標分類'); return; }
+  if(edSelected.size === 0){ alert('請先勾選要移動的品項'); return; }
+  const n = edSelected.size;
+  if(!confirm(`確定將 ${n} 筆品項移至「${cat}」>「${sub||'（未選子分類）'}」？`)) return;
+  edSelected.forEach(idx=>{
+    DB[idx].c = cat;
+    if(sub) DB[idx].s = sub;
+  });
+  edDirty = true;
+  edClearSel();
+  edFilter();
+}
+// ──────────────────────────────────────────────────────────────
+
+// ═══════════════════════════════════
+
 </script>
+
+<!-- ═══ 編輯資料庫 Modal ═══ -->
+<div class="modal-overlay" id="editor-modal" style="display:none" onclick="if(event.target===this)closeEditor()">
+  <div class="modal" style="width:900px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+    <div class="modal-title">✏️ 編輯資料庫</div>
+
+    <!-- 工具列 -->
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <input id="ed-search" type="text" placeholder="搜尋品名、規格…" oninput="edFilter()"
+        style="flex:1;min-width:180px;padding:6px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface2);outline:none">
+      <select id="ed-cat" onchange="edFilter()"
+        style="padding:6px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface2);outline:none;color:var(--text)">
+        <option value="">全部分類</option>
+      </select>
+      <button onclick="edAddRow()" style="padding:6px 14px;background:var(--green);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">＋ 新增品項</button>
+      <button onclick="edSaveSheets()" id="ed-save-btn"
+        style="padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">💾 儲存到 Sheets</button>
+    </div>
+
+    <!-- 表格 -->
+    <!-- 批次移動工具列 -->
+    <div id="ed-batch-bar" style="display:none;align-items:center;gap:8px;padding:8px 10px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:6px;margin-bottom:8px;flex-wrap:wrap">
+      <span id="ed-batch-count" style="font-size:12px;color:var(--blue);font-weight:600;min-width:60px"></span>
+      <span style="font-size:12px;color:var(--text2)">移至：</span>
+      <select id="ed-batch-cat" onchange="edBatchFillSub()"
+        style="padding:5px 8px;border:1px solid var(--border2);border-radius:5px;font-size:12px;background:#fff;outline:none">
+        <option value="">選分類…</option>
+      </select>
+      <select id="ed-batch-sub"
+        style="padding:5px 8px;border:1px solid var(--border2);border-radius:5px;font-size:12px;background:#fff;outline:none">
+        <option value="">選子分類…</option>
+      </select>
+      <button onclick="edBatchMove()"
+        style="padding:5px 14px;background:var(--blue);color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-weight:600">移動</button>
+      <button onclick="edClearSel()"
+        style="padding:5px 10px;background:none;border:1px solid var(--border2);border-radius:5px;font-size:12px;cursor:pointer;color:var(--text2)">取消選取</button>
+    </div>
+    <div style="flex:1;overflow:auto;border:1px solid var(--border);border-radius:6px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px" id="ed-table">
+        <thead style="position:sticky;top:0;background:var(--surface2);z-index:1">
+          <tr>
+            <th style="padding:8px;text-align:center;border-bottom:1px solid var(--border);width:36px">
+              <input type="checkbox" id="ed-chk-all" onchange="edToggleAll(this.checked)" title="全選">
+            </th>
+            <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);width:80px">分類</th>
+            <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);width:100px">子分類</th>
+            <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);width:130px">品名</th>
+            <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">規格</th>
+            <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border);width:50px">單位</th>
+            <th style="padding:8px;text-align:right;border-bottom:1px solid var(--border);width:80px">單價</th>
+            <th style="padding:8px;text-align:center;border-bottom:1px solid var(--border);width:50px">刪除</th>
+          </tr>
+        </thead>
+        <tbody id="ed-tbody"></tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+      <span id="ed-count" style="font-size:11px;color:var(--text3)"></span>
+      <button onclick="closeEditor()" style="padding:6px 16px;border:1px solid var(--border2);border-radius:6px;background:var(--surface);font-size:12px;cursor:pointer">關閉</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
