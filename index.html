@@ -1364,6 +1364,7 @@ function oauthSignIn(){
 
 window.addEventListener('load', ()=>{
   setTimeout(initOAuth, 1000);
+  try{ localStorage.setItem('bom_db_cache', JSON.stringify(DB)); }catch(e){}
 });
 // ═════════════════════════════════════
 
