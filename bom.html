@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>配件清單 BOM</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f0ede8;--surface:#faf9f6;--surface2:#f2f0eb;
+  --border:#dedad2;--border2:#ccc8be;
+  --text:#1c1b18;--text2:#58554e;--text3:#98958e;
+  --accent:#b83a10;--accent-bg:#fdf0ec;
+  --green:#1a6b3a;--green-bg:#edf7f1;
+  --blue:#1a4a8a;--blue-bg:#edf2fa;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Noto Sans TC',sans-serif;
+  --r:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;min-height:100vh}
+.topbar{background:#1c1b18;display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:52px;position:sticky;top:0;z-index:100}
+.logo{font-size:15px;font-weight:700;color:#fff}
+.logo-sub{font-size:10px;color:#888;margin-left:6px}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.tb-btn{padding:6px 14px;border-radius:6px;border:1px solid #3a3a38;background:transparent;color:#ccc;font-size:12px;cursor:pointer;font-family:var(--sans);transition:all .15s}
+.tb-btn:hover{border-color:#888;color:#fff}
+.tb-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.tb-btn.primary:hover{background:#9a2e09}
+.tb-btn.green{background:var(--green);border-color:var(--green);color:#fff}
+.tb-btn.green:hover{background:#145a30}
+.page{max-width:960px;margin:0 auto;padding:20px 16px 60px}
+.proj-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 20px;margin-bottom:20px}
+.proj-card-title{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px}
+.proj-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(min-width:600px){.proj-grid{grid-template-columns:2fr 1fr 1fr 1fr}}
+.proj-field label{display:block;font-size:10px;color:var(--text3);margin-bottom:3px;font-weight:600}
+.proj-field input,.proj-field textarea{width:100%;padding:6px 10px;border:1px solid var(--border2);border-radius:6px;font-family:var(--sans);font-size:12px;background:var(--surface2);color:var(--text);outline:none;transition:border-color .15s}
+.proj-field input:focus,.proj-field textarea:focus{border-color:var(--accent);background:#fff}
+.proj-field textarea{resize:vertical;min-height:36px;max-height:72px}
+.add-area{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:16px}
+.add-area-title{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
+.add-row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.add-field{display:flex;flex-direction:column;gap:3px}
+.add-field label{font-size:10px;color:var(--text2);font-weight:600}
+.add-field input,.add-field select{padding:6px 10px;border:1px solid var(--border2);border-radius:6px;font-family:var(--sans);font-size:12px;background:var(--surface2);color:var(--text);outline:none;transition:border-color .15s}
+.add-field input:focus{border-color:var(--accent);background:#fff}
+.f-name{flex:2;min-width:160px}
+.f-spec{flex:2;min-width:140px}
+.f-unit{width:70px}
+.f-qty{width:80px}
+.f-price{width:100px}
+.f-remark{flex:2;min-width:120px}
+.add-field input[type=number]{font-family:var(--mono)}
+.hint-wrap{position:relative}
+.hint-list{position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1px solid var(--border2);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:50;max-height:220px;overflow-y:auto;display:none}
+.hint-list.open{display:block}
+.hint-item{padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);transition:background .08s}
+.hint-item:last-child{border-bottom:none}
+.hint-item:hover,.hint-item.active{background:var(--accent-bg)}
+.hint-name{font-weight:600;color:var(--text)}
+.hint-spec{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:1px}
+.hint-price{font-size:10px;color:var(--accent);font-family:var(--mono);float:right}
+.hint-cat{font-size:9px;color:var(--text3);background:var(--surface2);padding:1px 5px;border-radius:3px;margin-left:4px}
+.bom-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.bom-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.bom-title{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.06em;text-transform:uppercase}
+.bom-count{font-size:11px;color:var(--text3);font-family:var(--mono)}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--surface2);padding:7px 10px;font-size:10px;font-weight:700;color:var(--text3);text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.06em}
+tbody tr{border-bottom:1px solid var(--border);transition:background .08s}
+tbody tr:hover{background:#fff}
+tbody td{padding:7px 10px;vertical-align:middle;font-size:12px}
+td.num{font-family:var(--mono);text-align:right}
+td.subtotal-cell{font-family:var(--mono);font-weight:600;color:var(--accent);text-align:right;min-width:90px}
+.row-name{font-weight:600}
+.row-spec{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:1px}
+.del-btn{background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 6px;border-radius:4px;font-size:14px;transition:all .1s;line-height:1}
+.del-btn:hover{color:#c00;background:#fee}
+.empty-row td{text-align:center;padding:40px;color:var(--text3);font-size:13px}
+.tag-from-db{display:inline-block;font-size:9px;background:var(--blue-bg);color:var(--blue);padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:700;vertical-align:middle}
+.totals{padding:12px 16px;border-top:2px solid var(--border2);display:flex;justify-content:flex-end;gap:24px;align-items:center;background:var(--surface)}
+.total-label{font-size:11px;color:var(--text2);font-weight:600}
+.total-val{font-size:16px;font-weight:700;color:var(--accent);font-family:var(--mono)}
+.total-block{text-align:right}
+.editable{cursor:text;padding:2px 4px;border-radius:3px;transition:background .1s;min-width:40px;display:inline-block}
+.editable:hover{background:var(--surface2)}
+.editable:focus{outline:1px solid var(--accent);background:#fff;border-radius:3px}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1c1b18;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;opacity:0;transition:all .3s;pointer-events:none;z-index:200}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media print{
+  .topbar,.add-area,.del-btn{display:none!important}
+  .page{padding:0;max-width:100%}
+  body{background:#fff}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <span class="logo">配件清單</span>
+    <span class="logo-sub">BOM Sheet</span>
+  </div>
+  <div class="topbar-right">
+    <button class="tb-btn" onclick="openCalc()">📊 材料計算器</button>
+    <button class="tb-btn" onclick="clearAll()">🗑 清空</button>
+    <button class="tb-btn green" onclick="exportExcel()">⬇ 匯出 Excel</button>
+    <button class="tb-btn primary" onclick="window.print()">🖨 列印</button>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="proj-card">
+    <div class="proj-card-title">案件資訊</div>
+    <div class="proj-grid">
+      <div class="proj-field">
+        <label>案件名稱 / 工程</label>
+        <input type="text" id="f-project" placeholder="例：華通重慶二廠 K-tower" oninput="saveProj()">
+      </div>
+      <div class="proj-field">
+        <label>客戶</label>
+        <input type="text" id="f-client" placeholder="例：華通電腦" oninput="saveProj()">
+      </div>
+      <div class="proj-field">
+        <label>日期</label>
+        <input type="date" id="f-date" oninput="saveProj()">
+      </div>
+      <div class="proj-field">
+        <label>負責人</label>
+        <input type="text" id="f-staff" placeholder="姓名" oninput="saveProj()">
+      </div>
+      <div class="proj-field" style="grid-column:1/-1">
+        <label>備註</label>
+        <textarea id="f-note" placeholder="圖號、版次、特殊說明…" oninput="saveProj()"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="add-area">
+    <div class="add-area-title" id="add-area-title">新增品項</div>
+    <div class="add-row">
+      <div class="add-field f-name">
+        <label>品名</label>
+        <div class="hint-wrap">
+          <input type="text" id="in-name" placeholder="輸入品名搜尋資料庫…" autocomplete="off"
+            oninput="onNameInput(this.value)" onkeydown="onNameKey(event)">
+          <div class="hint-list" id="hint-list"></div>
+        </div>
+      </div>
+      <div class="add-field f-spec">
+        <label>規格</label>
+        <input type="text" id="in-spec" placeholder="尺寸、型號…">
+      </div>
+      <div class="add-field f-unit">
+        <label>單位</label>
+        <input type="text" id="in-unit" placeholder="支" value="支">
+      </div>
+      <div class="add-field f-qty">
+        <label>數量</label>
+        <input type="number" id="in-qty" placeholder="0" min="0" step="1">
+      </div>
+      <div class="add-field f-price">
+        <label>單價（參考）</label>
+        <input type="number" id="in-price" placeholder="自動帶入" min="0" step="0.01">
+      </div>
+      <div class="add-field f-remark">
+        <label>備註</label>
+        <input type="text" id="in-remark" placeholder="位置、用途…" onkeydown="if(event.key==='Enter')addItem()">
+      </div>
+      <div class="add-field" style="justify-content:flex-end">
+        <label style="visibility:hidden">_</label>
+        <button class="tb-btn primary" onclick="addItem()" style="height:34px;padding:0 18px">＋ 加入</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bom-wrap">
+    <div class="bom-header">
+      <span class="bom-title">材料清單</span>
+      <span class="bom-count" id="bom-count">0 項</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:32px">#</th>
+          <th>品名</th>
+          <th>規格</th>
+          <th style="width:60px">單位</th>
+          <th style="width:70px;text-align:right">數量</th>
+          <th style="width:100px;text-align:right">單價</th>
+          <th style="width:100px;text-align:right">小計</th>
+          <th>備註</th>
+          <th style="width:40px"></th>
+        </tr>
+      </thead>
+      <tbody id="bom-body">
+        <tr class="empty-row"><td colspan="9">尚未加入任何品項<br>在上方輸入品名後按「加入」</td></tr>
+      </tbody>
+    </table>
+    <div class="totals">
+      <div class="total-block">
+        <div class="total-label">合計金額（參考）</div>
+        <div class="total-val" id="total-val">$0</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let DB = [];
+let items = [];
+const SK_BOM  = 'bom_items';
+const SK_PROJ = 'bom_proj';
+
+function load(){
+  try{ items = JSON.parse(localStorage.getItem(SK_BOM)||'[]'); }catch(e){ items=[]; }
+  try{
+    const p = JSON.parse(localStorage.getItem(SK_PROJ)||'{}');
+    if(p.project) document.getElementById('f-project').value = p.project;
+    if(p.client)  document.getElementById('f-client').value  = p.client;
+    if(p.date)    document.getElementById('f-date').value    = p.date;
+    if(p.staff)   document.getElementById('f-staff').value   = p.staff;
+    if(p.note)    document.getElementById('f-note').value    = p.note;
+  }catch(e){}
+  render();
+}
+
+function save(){
+  try{ localStorage.setItem(SK_BOM, JSON.stringify(items)); }catch(e){}
+}
+
+function saveProj(){
+  try{ localStorage.setItem(SK_PROJ, JSON.stringify({
+    project: document.getElementById('f-project').value,
+    client:  document.getElementById('f-client').value,
+    date:    document.getElementById('f-date').value,
+    staff:   document.getElementById('f-staff').value,
+    note:    document.getElementById('f-note').value,
+  })); }catch(e){}
+}
+
+function render(){
+  const tbody = document.getElementById('bom-body');
+  if(!items.length){
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">尚未加入任何品項<br>在上方輸入品名後按「加入」</td></tr>';
+    document.getElementById('bom-count').textContent = '0 項';
+    document.getElementById('total-val').textContent = '$0';
+    return;
+  }
+  const total = items.reduce((s,it)=>s+(it.qty*(it.price||0)),0);
+  tbody.innerHTML = items.map((it,i)=>`
+    <tr>
+      <td style="color:var(--text3);font-family:var(--mono);font-size:11px">${i+1}</td>
+      <td>
+        <div class="row-name">${esc(it.name)}${it.fromDB?'<span class="tag-from-db">DB</span>':''}</div>
+      </td>
+      <td><div class="row-spec">${esc(it.spec||'—')}</div></td>
+      <td>${esc(it.unit||'支')}</td>
+      <td class="num">
+        <span class="editable" contenteditable="true"
+          onblur="editField(${i},'qty',parseFloat(this.textContent)||0);renderTotal()"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
+        >${it.qty}</span>
+      </td>
+      <td class="num">
+        <span class="editable" contenteditable="true"
+          onblur="editField(${i},'price',parseFloat(this.textContent)||0);renderTotal()"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
+          style="color:var(--accent)"
+        >${it.price||0}</span>
+      </td>
+      <td class="subtotal-cell">${it.price?'$'+(it.qty*(it.price||0)).toLocaleString('zh-TW'):'—'}</td>
+      <td style="color:var(--text2);font-size:11px">
+        <span class="editable" contenteditable="true"
+          onblur="editField(${i},'remark',this.textContent.trim())"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
+        >${esc(it.remark||'')}</span>
+      </td>
+      <td><button class="del-btn" onclick="delItem(${i})">✕</button></td>
+    </tr>
+  `).join('');
+  document.getElementById('bom-count').textContent = items.length + ' 項';
+  document.getElementById('total-val').textContent = '$' + Math.round(total).toLocaleString('zh-TW');
+}
+
+function renderTotal(){
+  const total = items.reduce((s,it)=>s+(it.qty*(it.price||0)),0);
+  document.getElementById('total-val').textContent = '$' + Math.round(total).toLocaleString('zh-TW');
+  document.querySelectorAll('#bom-body tr').forEach((tr,i)=>{
+    const cell = tr.querySelector('.subtotal-cell');
+    if(cell && items[i]){
+      const sub = items[i].qty*(items[i].price||0);
+      cell.textContent = items[i].price ? '$'+sub.toLocaleString('zh-TW') : '—';
+    }
+  });
+}
+
+function editField(idx, field, val){
+  items[idx][field] = val;
+  save();
+}
+
+let _lastFromDB = false;
+
+function addItem(){
+  const name   = document.getElementById('in-name').value.trim();
+  const spec   = document.getElementById('in-spec').value.trim();
+  const unit   = document.getElementById('in-unit').value.trim() || '支';
+  const qty    = parseFloat(document.getElementById('in-qty').value) || 1;
+  const price  = parseFloat(document.getElementById('in-price').value) || 0;
+  const remark = document.getElementById('in-remark').value.trim();
+  if(!name){ document.getElementById('in-name').focus(); toast('請輸入品名'); return; }
+  items.push({ id:Date.now(), name, spec, unit, qty, price, remark, fromDB:!!_lastFromDB });
+  save(); render();
+  ['in-name','in-spec','in-qty','in-price','in-remark'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('in-unit').value = '支';
+  _lastFromDB = false;
+  document.getElementById('in-name').focus();
+  toast('已加入：'+name);
+}
+
+function delItem(idx){
+  items.splice(idx,1); save(); render();
+}
+
+function clearAll(){
+  if(!items.length){ if(!confirm('確定清空案件資訊？'))return; saveProj(); return; }
+  if(!confirm('確定清空所有品項？'))return;
+  items=[]; save(); render();
+}
+
+// ── 搜尋提示 ────────────────────────────────────────────────────
+let _hintIdx = -1;
+
+function onNameInput(val){
+  _lastFromDB = false;
+  const q = val.trim().toLowerCase();
+  const list = document.getElementById('hint-list');
+  if(!q || !DB.length){ list.classList.remove('open'); return; }
+  const results = DB.filter(it=>
+    (it.n||'').toLowerCase().includes(q)||(it.p||'').toLowerCase().includes(q)
+  ).slice(0,12);
+  if(!results.length){ list.classList.remove('open'); return; }
+  _hintIdx = -1;
+  list.innerHTML = results.map((it,i)=>`
+    <div class="hint-item" data-i="${i}" onmousedown="pickHint(${i})">
+      <span class="hint-price">${it.v?'$'+it.v+'/'+it.u:''}</span>
+      <span class="hint-name">${esc(it.n)}</span>
+      <span class="hint-cat">${esc(it.c)}</span>
+      <div class="hint-spec">${esc(it.p||'')}</div>
+    </div>
+  `).join('');
+  list._results = results;
+  list.classList.add('open');
+}
+
+function pickHint(i){
+  const list = document.getElementById('hint-list');
+  const it = list._results[i];
+  if(!it) return;
+  document.getElementById('in-name').value  = it.n;
+  document.getElementById('in-spec').value  = it.p||'';
+  document.getElementById('in-unit').value  = it.u||'支';
+  document.getElementById('in-price').value = it.v||'';
+  _lastFromDB = true;
+  list.classList.remove('open');
+  document.getElementById('in-qty').focus();
+}
+
+function onNameKey(e){
+  const list = document.getElementById('hint-list');
+  const hints = list.querySelectorAll('.hint-item');
+  if(!list.classList.contains('open')) return;
+  if(e.key==='ArrowDown'){ e.preventDefault(); _hintIdx=Math.min(_hintIdx+1,hints.length-1); highlightHint(hints); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); _hintIdx=Math.max(_hintIdx-1,0); highlightHint(hints); }
+  else if(e.key==='Enter'){ e.preventDefault(); if(_hintIdx>=0)pickHint(_hintIdx); else list.classList.remove('open'); }
+  else if(e.key==='Escape'){ list.classList.remove('open'); }
+}
+
+function highlightHint(els){
+  els.forEach((el,i)=>el.classList.toggle('active',i===_hintIdx));
+  if(els[_hintIdx]) els[_hintIdx].scrollIntoView({block:'nearest'});
+}
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.hint-wrap')) document.getElementById('hint-list').classList.remove('open');
+});
+
+// ── 匯出 Excel(CSV) ─────────────────────────────────────────────
+function exportExcel(){
+  const proj  = document.getElementById('f-project').value;
+  const client= document.getElementById('f-client').value;
+  const date  = document.getElementById('f-date').value;
+  const staff = document.getElementById('f-staff').value;
+  const note  = document.getElementById('f-note').value;
+  const rows  = [];
+  rows.push(['配件清單 BOM']);
+  rows.push(['案件',proj||'—','客戶',client||'—']);
+  rows.push(['日期',date||'—','負責人',staff||'—']);
+  if(note) rows.push(['備註',note]);
+  rows.push([]);
+  rows.push(['#','品名','規格','單位','數量','單價（參考）','小計','備註','來源']);
+  items.forEach((it,i)=>{
+    rows.push([i+1,it.name,it.spec||'',it.unit||'支',it.qty,it.price||'',
+      it.price?it.qty*(it.price||0):'',it.remark||'',it.fromDB?'資料庫':'手動輸入']);
+  });
+  rows.push([]);
+  const total=items.reduce((s,it)=>s+(it.qty*(it.price||0)),0);
+  rows.push(['','','','','','合計',Math.round(total),'','']);
+  const csv=rows.map(r=>r.map(v=>{
+    const s=String(v??'');
+    return s.includes(',')||s.includes('"')||s.includes('\n')?'"'+s.replace(/"/g,'""')+'"':s;
+  }).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const ds=(date||new Date().toISOString().slice(0,10)).replace(/-/g,'');
+  a.href=url; a.download=`BOM_${proj||'未命名'}_${ds}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  toast('已匯出，用 Excel 開啟即可');
+}
+
+function openCalc(){ window.open('./index.html','_blank'); }
+
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),2200);
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+window.addEventListener('DOMContentLoaded',()=>{
+  const d=document.getElementById('f-date');
+  if(!d.value) d.value=new Date().toISOString().slice(0,10);
+  // 讀取計算器存入的 DB 快取
+  try{
+    const cached=localStorage.getItem('bom_db_cache');
+    if(cached){
+      DB=JSON.parse(cached);
+      if(DB.length){
+        document.getElementById('add-area-title').textContent=
+          `新增品項（資料庫已連結，共 ${DB.length} 筆品項可搜尋）`;
+      }
+    }
+  }catch(e){}
+  load();
+});
+</script>
+</body>
+</html>
